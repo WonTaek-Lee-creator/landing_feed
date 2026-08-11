@@ -1,0 +1,13 @@
+{
+  "name": "잠드는 피드",
+  "short_name": "잠드는 피드",
+  "description": "고자극에서 어둠까지, 네 단계로 내려앉는 밤",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b1026",
+  "theme_color": "#0b1026",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
