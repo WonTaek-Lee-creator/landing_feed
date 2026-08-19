@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>잠드는 피드</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root{
+    --bg-base: #000000;
+    --bg-elevated: #121214;
+    --bg-elevated-2: #1c1c1f;
+    --bg-elevated-3: #232326;
+    --hairline: rgba(255,255,255,0.08);
+    --hairline-soft: rgba(255,255,255,0.05);
+    --accent: #f2a75c;
+    --accent-deep: #d6832f;
+    --moon: #fbeed9;
+    --ink: #f5f5f7;
+    --ink-dim: #98989d;
+    --ink-faint: #6c6c70;
+    --story-serif: 'Noto Serif KR', Georgia, serif;
+    --ui-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Pretendard', 'Malgun Gothic', sans-serif;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%; overflow:hidden;}
+  body{
+    font-family:var(--ui-sans); background:var(--bg-base); color:var(--ink);
+    transition:background 2.5s ease; -webkit-font-smoothing:antialiased;
+  }
+  #app{ position:relative; height:100vh; height:100dvh; width:100vw; display:flex; flex-direction:column;
+        padding: max(24px, env(safe-area-inset-top)) 22px calc(84px + env(safe-area-inset-bottom)) 22px; }
+
+  .screen{ display:none; flex:1; flex-direction:column; }
+  .screen.visible{ display:flex; animation:screenIn 0.45s var(--ease); }
+  @keyframes screenIn{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:translateY(0);} }
+
+  #screen-player.screen.visible, #screen-sleep.screen.visible, #screen-end.screen.visible{
+    position:fixed; inset:0; z-index:50; padding: max(20px, env(safe-area-inset-top)) 22px max(20px, env(safe-area-inset-bottom));
+  }
+
+  /* BOTTOM NAV */
+  .bottom-nav{ position:fixed; left:0; right:0; bottom:0; z-index:10; display:flex; justify-content:space-around;
+    padding: 14px 12px max(14px, env(safe-area-inset-bottom));
+    background:rgba(8,8,9,0.75); backdrop-filter:blur(20px); border-top:1px solid var(--hairline-soft); }
+  .nav-btn{ background:transparent; border:none; display:flex; align-items:center; justify-content:center;
+    color:var(--ink-faint); padding:8px 26px; }
+  .nav-btn.active{ color:var(--ink); }
+
+  /* HOME */
+  #screen-home{ justify-content:flex-start; align-items:stretch; text-align:left; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; }
+  .brand{ font-family:var(--story-serif); font-size:13px; letter-spacing:0.4em; color:var(--ink-faint); text-transform:uppercase; }
+  .title-moon{ font-size:52px; line-height:1; filter:drop-shadow(0 0 28px rgba(242,167,92,0.35)); position:relative; }
+  h1.hero{ font-family:var(--ui-sans); font-weight:700; font-size:26px; margin:0; line-height:1.42; letter-spacing:-0.01em; color:var(--ink); }
+  p.sub{ color:var(--ink-dim); font-size:14px; line-height:1.65; max-width:270px; margin:0; letter-spacing:-0.005em; }
+
+  button{ font-family:var(--ui-sans); cursor:pointer; -webkit-tap-highlight-color:transparent; transition:transform 0.15s var(--ease), opacity 0.15s var(--ease); }
+  button:active{ transform:scale(0.97); opacity:0.9; }
+
+  .btn-primary{ width:100%; max-width:320px; padding:17px; border-radius:18px; border:none;
+    background:linear-gradient(180deg, var(--accent), var(--accent-deep)); color:#1a1206; font-weight:700; font-size:15.5px;
+    letter-spacing:-0.01em; box-shadow:0 10px 24px -8px rgba(242,167,92,0.45), inset 0 1px 0 rgba(255,255,255,0.25); }
+  .btn-ghost{ background:var(--bg-elevated-2); border:1px solid var(--hairline); color:var(--ink); border-radius:18px; padding:14px 22px; font-size:14px; font-weight:600; }
+  .link-btn{ background:transparent; border:none; color:var(--ink-dim); font-size:13px; font-weight:500; padding:8px; }
+
+  /* RADIO LIST */
+  #screen-radios{ justify-content:flex-start; gap:14px; }
+  .page-head{ padding-top:2px; padding-bottom:6px; }
+  .brand-row{ display:flex; flex-direction:column; gap:6px; }
+  .page-title{ font-family:var(--ui-sans); font-weight:700; font-size:26px; letter-spacing:-0.02em; }
+  .streak-badge{ display:inline-flex; align-items:center; gap:6px; align-self:flex-start; margin-top:2px;
+    background:var(--bg-elevated); border:1px solid var(--hairline); border-radius:999px; padding:6px 14px;
+    font-size:12.5px; font-weight:600; color:var(--accent); }
+
+  /* TONIGHT'S SHORTS (bounded, non-infinite) */
+  .shorts-section{ margin: 18px 0 4px; }
+  .shorts-title{ font-size:13px; font-weight:700; color:var(--ink-dim); margin-bottom:10px; letter-spacing:-0.005em; }
+  .shorts-row{ display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; scroll-snap-type:x proximity; }
+  .short-card{ flex:0 0 auto; width:112px; scroll-snap-align:start; background:var(--bg-elevated);
+    border:1px solid var(--hairline); border-radius:16px; overflow:hidden; text-align:left; color:var(--ink); }
+  .short-card .sthumb{ width:100%; aspect-ratio:9/13; object-fit:cover; background:var(--bg-elevated-2); }
+  .short-card .stitle{ font-size:11px; font-weight:600; padding:8px 9px 10px; line-height:1.4;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .shorts-empty-hint{ font-size:12px; color:var(--ink-faint); line-height:1.6; }
+  .list-section-label{ font-size:13px; font-weight:700; color:var(--ink-dim); margin:4px 0 -2px; letter-spacing:-0.005em; }
+  .radio-list{ display:flex; flex-direction:column; gap:14px; padding-bottom:8px; }
+  .radio-card{ display:flex; align-items:center; gap:16px; background:var(--bg-elevated); border:1px solid var(--hairline);
+    border-radius:22px; padding:20px; text-align:left; color:var(--ink);
+    box-shadow:0 1px 0 rgba(255,255,255,0.03) inset; }
+  .radio-card .rdot{ width:52px; height:52px; border-radius:50%; flex-shrink:0;
+    background:radial-gradient(circle at 35% 30%, var(--accent), var(--accent-deep));
+    box-shadow:0 6px 14px -3px rgba(242,167,92,0.45); display:flex; align-items:center; justify-content:center;
+    font-size:22px; }
+  select{ width:100%; background:var(--bg-elevated-2); border:1px solid var(--hairline); border-radius:14px;
+    padding:13px 14px; color:var(--ink); font-size:14px; font-family:var(--ui-sans); }
+  .radio-card .rname{ font-size:17px; font-weight:700; letter-spacing:-0.015em; }
+  .radio-card .rmeta{ display:flex; flex-direction:column; gap:4px; align-items:flex-start; }
+  .radio-card .rdesc{ font-size:12.5px; color:var(--ink-dim); }
+  .radio-card .rplatform{ font-size:11.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; }
+  .radio-card .rthumb{ width:52px; height:52px; border-radius:16px; object-fit:cover; flex-shrink:0; background:var(--bg-elevated-2); }
+  .radio-empty{ color:var(--ink-dim); font-size:13.5px; line-height:1.7; text-align:center; padding:48px 16px; }
+
+  /* SETTINGS */
+  #screen-settings{ justify-content:flex-start; gap:18px; overflow-y:auto; padding-bottom:12px; }
+  .field-label{ font-size:12.5px; font-weight:600; color:var(--ink-dim); padding-left:2px; margin-bottom:8px; display:block; letter-spacing:-0.005em; }
+  .field-group{ margin-bottom:4px; padding-bottom:16px; border-bottom:1px solid var(--hairline-soft); }
+  .field-group:last-child{ border-bottom:none; }
+  input[type=text], input[type=number], input[type=time]{
+    width:100%; background:var(--bg-elevated-2); border:1px solid var(--hairline); border-radius:14px;
+    padding:13px 14px; color:var(--ink); font-size:14px; font-family:var(--ui-sans);
+    transition:border-color 0.2s var(--ease), background 0.2s var(--ease);
+  }
+  input[type=text]:focus, input[type=number]:focus, input[type=time]:focus{
+    outline:none; border-color:var(--accent); background:var(--bg-elevated-3);
+  }
+  .add-radio-row{ display:flex; gap:8px; }
+  .add-radio-row input{ flex:1; }
+  .btn-add{ background:linear-gradient(180deg, var(--accent), var(--accent-deep)); border:none; color:#1a1206;
+    border-radius:14px; padding:0 18px; font-weight:700; font-size:19px;
+    box-shadow:0 6px 16px -6px rgba(242,167,92,0.5); }
+  .settings-radio-item{ display:flex; align-items:center; justify-content:space-between; background:var(--bg-elevated);
+    border:1px solid var(--hairline-soft); border-radius:14px; padding:12px 14px; font-size:13px; color:var(--ink-dim); }
+  .settings-radio-item button{ background:transparent; border:none; color:#e2836f; font-size:17px; }
+  .setup-row{ display:flex; align-items:center; justify-content:space-between; background:var(--bg-elevated);
+    border:1px solid var(--hairline); border-radius:16px; padding:14px 18px; }
+  .setup-row label{ font-size:14px; color:var(--ink); font-weight:500; }
+  .setup-row input[type=number]{ width:56px; text-align:right; border:none; background:transparent; font-weight:700; color:var(--accent); font-size:16px; padding:0; }
+  .hint{ font-size:12px; color:var(--ink-faint); line-height:1.65; padding:0 2px; letter-spacing:-0.005em; }
+
+  /* PLAYER (radio phase) */
+  #screen-player{ position:relative; justify-content:center; align-items:center; }
+  .embed-wrap{ position:absolute; inset:0; border-radius:0; overflow:hidden; }
+  .embed-wrap iframe{ width:100%; height:100%; border:none; }
+  .fade-overlay{ position:absolute; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity 1s linear; }
+  .player-topbar{ position:absolute; z-index:3; top:max(20px, env(safe-area-inset-top)); left:20px; right:20px;
+    display:flex; align-items:center; justify-content:space-between; }
+  .pill-btn{ background:rgba(0,0,0,0.45); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.14);
+    color:rgba(255,255,255,0.85); font-size:12.5px; font-weight:600; padding:9px 15px; border-radius:999px; }
+  .player-hud{ position:relative; z-index:2; width:100%; display:flex; flex-direction:column; align-items:center; gap:10px;
+    margin-top:auto; padding-bottom:max(28px, env(safe-area-inset-bottom)); }
+  .player-timer{ font-variant-numeric:tabular-nums; font-size:13px; font-weight:600; color:rgba(255,255,255,0.85);
+    background:rgba(0,0,0,0.4); backdrop-filter:blur(12px); padding:8px 18px; border-radius:999px; border:1px solid rgba(255,255,255,0.1); }
+  .player-label{ font-size:11px; letter-spacing:0.14em; color:rgba(255,255,255,0.55); text-transform:uppercase; font-weight:600; }
+
+  .embed-wrap.is-audio-only{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px;
+    background:radial-gradient(circle at 50% 35%, var(--bg-elevated-3), var(--bg-base) 75%); }
+  .hidden-video-iframe{ position:absolute; inset:0; width:100%; height:100%; border:none; opacity:0; pointer-events:none; z-index:0; }
+  .player-audio-art{ width:180px; height:180px; border-radius:32px; overflow:hidden; background:var(--bg-elevated-2);
+    display:flex; align-items:center; justify-content:center; font-size:64px; box-shadow:0 20px 50px -12px rgba(0,0,0,0.6);
+    position:relative; z-index:1; }
+  .player-audio-art img{ width:100%; height:100%; object-fit:cover; }
+  .eq-bars{ display:flex; align-items:flex-end; gap:5px; height:28px; position:relative; z-index:1; }
+  .eq-bars span{ width:4px; border-radius:3px; background:var(--accent); animation:eqbar 1.1s ease-in-out infinite; }
+  .eq-bars span:nth-child(1){ height:40%; animation-delay:0s; }
+  .eq-bars span:nth-child(2){ height:70%; animation-delay:0.15s; }
+  .eq-bars span:nth-child(3){ height:100%; animation-delay:0.3s; }
+  .eq-bars span:nth-child(4){ height:60%; animation-delay:0.1s; }
+  .eq-bars span:nth-child(5){ height:80%; animation-delay:0.25s; }
+  @keyframes eqbar{ 0%,100%{ transform:scaleY(0.5);} 50%{ transform:scaleY(1);} }
+
+  /* SLEEP SOUND (final dark stage) */
+  #screen-sleep{ position:relative; background:#000; justify-content:center; align-items:center; text-align:center; gap:18px; }
+  .pulse-dot{ width:9px; height:9px; border-radius:50%; background:var(--accent); animation:pulse 2.6s ease-in-out infinite;
+    box-shadow:0 0 16px rgba(242,167,92,0.6); }
+  @keyframes pulse{ 0%,100%{ opacity:0.3; transform:scale(0.85);} 50%{ opacity:1; transform:scale(1.1);} }
+  #screen-sleep p{ color:var(--ink-faint); font-size:12px; letter-spacing:0.1em; font-weight:500; }
+
+  /* END */
+  #screen-end{ justify-content:center; align-items:center; text-align:center; gap:16px; }
+
+  .bottom-actions{ display:flex; gap:10px; padding-top:16px; }
+  .bottom-actions button{ flex:1; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HOME (feed) -->
+  <div id="screen-home" class="screen visible">
+    <div class="page-head">
+      <div class="brand-row">
+        <div class="brand">Landing Feed</div>
+        <div class="page-title">오늘 밤의 라디오</div>
+        <div class="streak-badge" id="streak-badge" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="radio-list" id="radio-list"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="screen-settings" class="screen">
+    <div class="page-head">
+      <div class="page-title">설정</div>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">매일 알림 받을 시간</label>
+      <div class="add-radio-row">
+        <input type="time" id="alarm-time" value="00:00">
+        <button class="btn-add" id="btn-set-alarm" style="width:auto; padding:0 14px; font-size:12px;">알람 등록</button>
+      </div>
+      <p class="hint">누르면 폰 기본 시계 앱의 알람 등록 화면이 이 시간으로 미리 채워진 채 열려요. 거기서 저장 버튼만 눌러주면 매일 알림이 와요.</p>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">라디오 추가 (플랫폼 · 이름 · 링크)</label>
+      <div class="add-radio-row" style="margin-bottom:8px;">
+        <select id="new-radio-platform">
+          <option value="rss">팟캐스트 RSS (추천 — 매번 최신 화 자동재생)</option>
+          <option value="audiofile">오디오 링크 (mp3 직접재생)</option>
+          <option value="youtube">유튜브</option>
+          <option value="spotify">스포티파이 (팟캐스트)</option>
+          <option value="podbbang">팟빵</option>
+        </select>
+      </div>
+      <div class="add-radio-row" style="margin-bottom:8px;">
+        <input type="text" id="new-radio-name" placeholder="이름 (예: 로파이)">
+      </div>
+      <div class="add-radio-row">
+        <input type="text" id="new-radio-url" placeholder="https://...">
+        <button class="btn-add" id="btn-add-radio">+</button>
+      </div>
+      <p class="hint" id="platform-hint">이 팟캐스트의 RSS 피드 주소를 넣으면, 열 때마다 최신 화를 자동으로 가져와서 틀어줘요.</p>
+    </div>
+
+    <div class="field-group" id="radio-manage-list"></div>
+
+    <div class="setup-row">
+      <label>라디오 재생 시간</label>
+      <input type="number" id="dur-radio" value="30" min="5" max="90"> 분
+    </div>
+    <p class="hint">연구에 따르면 잠들기 전 이완 음악은 25~45분 정도 들었을 때 효과가 가장 뚜렷해요. 기본값은 30분으로 맞춰뒀어요.</p>
+
+    <div class="field-group">
+      <label class="field-label">수면 사운드 — 내가 만든 파일 재생</label>
+      <input type="text" id="sleep-sound-file" placeholder="sleep.mp3 (저장소에 올린 파일명)">
+      <p class="hint">Suno에서 다운로드한 mp3 파일을 이 앱과 같은 깃허브 저장소에 올린 다음, 그 파일명을 여기에 입력하면 매일 밤 자동으로 재생돼요.</p>
+      <button class="link-btn" id="btn-pick-local-file" style="margin-top:4px;">지금 기기에서 바로 골라 테스트하기</button>
+      <input type="file" id="local-file-input" accept="audio/*" style="display:none;">
+      <p class="hint" id="local-file-status"></p>
+    </div>
+
+    <div class="setup-row">
+      <label>수면 사운드 재생 시간</label>
+      <input type="number" id="dur-sleep" value="30" min="10" max="90"> 분
+    </div>
+    <p class="hint">밤새 트는 것보다, 30~45분 정도에 자동으로 꺼지는 편이 근거에 더 가까워요 — 대부분 그 안에 잠들고, 계속 틀어두면 오히려 소리에 의존하게 될 수 있어요.</p>
+  </div>
+
+  <!-- PLAYER (radio phase, with fade overlay) -->
+  <div id="screen-player" class="screen">
+    <div class="embed-wrap" id="player-embed-wrap"></div>
+    <div class="fade-overlay" id="fade-overlay"></div>
+    <div class="player-topbar">
+      <button class="pill-btn" id="btn-player-close">닫기</button>
+      <button class="pill-btn" id="btn-player-skip">수면 사운드로 건너뛰기</button>
+    </div>
+    <div class="player-hud">
+      <div class="player-label" id="player-label">라디오 재생 중</div>
+      <div class="player-timer" id="player-timer">30:00</div>
+    </div>
+  </div>
+
+  <!-- SLEEP SOUND -->
+  <div id="screen-sleep" class="screen">
+    <div class="player-topbar" style="position:absolute; top:max(20px, env(safe-area-inset-top)); left:20px; right:20px;">
+      <button class="pill-btn" id="btn-sleep-close">닫기</button>
+      <span></span>
+    </div>
+    <div class="pulse-dot"></div>
+    <p id="sleep-timer">60:00 남음 · 수면 사운드</p>
+  </div>
+
+  <!-- END -->
+  <div id="screen-end" class="screen">
+    <div class="title-moon">🌘</div>
+    <h1 class="hero">굿나잇</h1>
+    <p class="sub">여기까지 왔으면 충분해요. 이제 화면을 내려놓아도 좋아요.</p>
+    <p class="streak-badge" id="end-streak-line" style="align-self:center;"></p>
+    <button class="btn-ghost" id="btn-restart">처음으로</button>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" id="nav-home" aria-label="홈">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></svg>
+    </button>
+    <button class="nav-btn" id="nav-sleep" aria-label="수면 음악">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.2A8.5 8.5 0 1 1 9.8 4a6.7 6.7 0 0 0 10.2 10.2Z"/></svg>
+    </button>
+    <button class="nav-btn" id="nav-settings" aria-label="설정">
+      <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2.06 2.06 0 1 1-2.92 2.92l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56v.16a2.06 2.06 0 1 1-4.12 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2.06 2.06 0 1 1-2.92-2.92l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H4.6a2.06 2.06 0 1 1 0-4.12h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2.06 2.06 0 1 1 2.92-2.92l.06.06a1.7 1.7 0 0 0 1.87.34h.08a1.7 1.7 0 0 0 1.03-1.56V4.6a2.06 2.06 0 1 1 4.12 0v.09a1.7 1.7 0 0 0 1.03 1.56h.08a1.7 1.7 0 0 0 1.87-.34l.06-.06a2.06 2.06 0 1 1 2.92 2.92l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08a1.7 1.7 0 0 0 1.56 1.03h.16a2.06 2.06 0 1 1 0 4.12h-.09a1.7 1.7 0 0 0-1.56 1.03Z"/></svg>
+    </button>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const SCREENS = ['screen-home','screen-settings','screen-player','screen-sleep','screen-end'];
+  function show(id){ SCREENS.forEach(s => $(s).classList.toggle('visible', s === id)); }
+  function setNavActive(id){
+    ['nav-home','nav-sleep','nav-settings'].forEach(n => $(n).classList.toggle('active', n === id));
+  }
+
+  let state = {
+    radios: [], // user-added custom radios (settings)
+    durRadio: 30,
+    durSleep: 30,
+    sleepFile: 'sleep.mp3',
+    alarmTime: '00:00',
+    streakCount: 0,
+    streakLastDate: null
+  };
+  let curatedStations = []; // freshly fetched live internet radio stations, not persisted
+  let curatedLoading = false;
+  let localAudioObjectUrl = null; // in-memory only, for "test now" picker
+  let timerHandle = null;
+  let phaseEndAt = 0;
+  let phaseStartAt = 0;
+  let phaseTotalMs = 0;
+
+  const RADIO_BROWSER_HOSTS = ['de1.api.radio-browser.info', 'nl1.api.radio-browser.info'];
+  const CURATED_TAGS = ['sleep', 'meditation', 'ambient', 'spa', 'nature sounds'];
+  const NOISY_KEYWORDS = ['dance','party','edm','house','techno','pop hits','top 40','rock','club','trance','hip hop','hits fm','festival','kpop','k-pop','아이돌','idol','가요','인기가요','댄스가요'];
+
+  function isLikelyCalm(station){
+    const text = `${station.name} ${station.tags}`.toLowerCase();
+    return !NOISY_KEYWORDS.some(k => text.includes(k));
+  }
+
+  async function fetchCuratedStations(){
+    curatedLoading = true;
+    for(const host of RADIO_BROWSER_HOSTS){
+      try{
+        const results = [];
+        for(const tag of CURATED_TAGS){
+          const res = await fetch(`https://${host}/json/stations/bytag/${encodeURIComponent(tag)}?limit=6&hidebroken=true&order=votes&reverse=true`);
+          if(!res.ok) throw new Error('bad response');
+          const data = await res.json();
+          data.filter(isLikelyCalm).slice(0, 2).forEach(st => {
+            if(st.url_resolved){
+              results.push({
+                name: st.name.trim().slice(0, 40),
+                url: st.url_resolved,
+                platform: 'stream',
+                favicon: st.favicon || '',
+                desc: (st.tags || st.countrycode || '실시간 방송').split(',').slice(0,2).join(' · ')
+              });
+            }
+          });
+        }
+        if(results.length){
+          curatedStations = results;
+          curatedLoading = false;
+          return true;
+        }
+      }catch(e){ /* try next host */ }
+    }
+    curatedLoading = false;
+    return false;
+  }
+
+  function save(){
+    try{ localStorage.setItem('landingfeed_state', JSON.stringify(state)); }catch(e){}
+  }
+  function load(){
+    try{
+      const saved = JSON.parse(localStorage.getItem('landingfeed_state'));
+      if(saved) state = Object.assign(state, saved);
+    }catch(e){}
+  }
+
+  function toEmbeddable(url, platform){
+    if(!url) return null;
+    if(platform === 'podbbang'){
+      // Podbbang share panel gives an embed-ready src URL directly — pass it through as-is.
+      return url;
+    }
+    if(platform === 'spotify'){
+      try{
+        const u = new URL(url);
+        if(u.hostname.includes('open.spotify.com')){
+          // e.g. /episode/xxxx or /show/xxxx -> /embed/episode/xxxx
+          const parts = u.pathname.split('/').filter(Boolean); // ['episode','xxxx'] or ['show','xxxx']
+          if(parts.length >= 2){
+            return `https://open.spotify.com/embed/${parts[0]}/${parts[1]}`;
+          }
+        }
+        return url;
+      }catch(e){ return null; }
+    }
+    try{
+      const u = new URL(url);
+      if(u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')){
+        let id = '';
+        if(u.hostname.includes('youtu.be')) id = u.pathname.slice(1);
+        else if(u.searchParams.get('v')) id = u.searchParams.get('v');
+        else if(u.pathname.includes('/shorts/')) id = u.pathname.split('/shorts/')[1];
+        else if(u.pathname.includes('/live/')) id = u.pathname.split('/live/')[1];
+        if(id) return `https://www.youtube.com/embed/${id}?autoplay=1&playsinline=1`;
+      }
+      return url;
+    }catch(e){ return null; }
+  }
+
+  // ---------- NAV ----------
+  $('nav-home').addEventListener('click', () => {
+    readSettingsForm(); save();
+    loadCuratedIfNeeded();
+    show('screen-home');
+    setNavActive('nav-home');
+  });
+  $('nav-settings').addEventListener('click', () => {
+    renderSettings();
+    show('screen-settings');
+    setNavActive('nav-settings');
+  });
+  $('nav-sleep').addEventListener('click', () => {
+    readSettingsForm(); save();
+    startSleepSound();
+  });
+
+  // ---------- RADIO LIST ----------
+  function makeRadioCard(r){
+    const btn = document.createElement('button');
+    btn.className = 'radio-card';
+    const platformLabel = r.labelOverride || ({ podbbang:'팟빵', youtube:'유튜브', spotify:'스포티파이', stream:'라이브 라디오', audiofile:'오디오', rss:'팟캐스트 · 최신 화' }[r.platform] || '오디오');
+    const icons = { podbbang:'🎙️', stream:'📻', spotify:'🎧', youtube:'▶', audiofile:'🎧', rss:'🎙️' };
+    const thumbSrc = r.thumb || (r.platform === 'stream' ? r.favicon : null);
+    const thumbHtml = thumbSrc
+      ? `<img class="rthumb" src="${thumbSrc}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"><span class="rdot" style="display:none;">${icons[r.platform] || '▶'}</span>`
+      : `<span class="rdot">${icons[r.platform] || '▶'}</span>`;
+    const descHtml = r.desc ? `<span class="rdesc">${r.desc}</span>` : '';
+    btn.innerHTML = `${thumbHtml}<span class="rmeta"><span class="rname">${r.name || '이름 없는 라디오'}</span>${descHtml}<span class="rplatform">${platformLabel}</span></span>`;
+    btn.addEventListener('click', () => {
+      if(r.platform === 'rss') playRssRadio(r, btn);
+      else startPlayer(r);
+    });
+    return btn;
+  }
+
+  async function resolveRssLatestEpisode(feedUrl){
+    const res = await fetch(feedUrl);
+    if(!res.ok) throw new Error('rss fetch failed');
+    const text = await res.text();
+    const xml = new DOMParser().parseFromString(text, 'text/xml');
+    if(xml.querySelector('parsererror')) throw new Error('rss parse failed');
+    const item = xml.querySelector('item');
+    if(!item) throw new Error('no items in feed');
+    const title = item.querySelector('title')?.textContent?.trim() || '최신 화';
+    const enclosure = item.querySelector('enclosure');
+    const audioUrl = enclosure?.getAttribute('url');
+    if(!audioUrl) throw new Error('no audio url in latest item');
+    let thumb = '';
+    const itunesImg = item.getElementsByTagName('itunes:image')[0] || xml.getElementsByTagName('itunes:image')[0];
+    if(itunesImg) thumb = itunesImg.getAttribute('href') || '';
+    if(!thumb){
+      const chanImg = xml.querySelector('channel > image > url');
+      if(chanImg) thumb = chanImg.textContent || '';
+    }
+    return { title, audioUrl, thumb };
+  }
+
+  async function playRssRadio(radio, btnEl){
+    const nameEl = btnEl.querySelector('.rname');
+    const originalName = nameEl ? nameEl.textContent : radio.name;
+    btnEl.disabled = true;
+    if(nameEl) nameEl.textContent = '최신 화 불러오는 중...';
+    try{
+      const ep = await resolveRssLatestEpisode(radio.url);
+      startPlayer({ name: ep.title, url: ep.audioUrl, platform: 'audiofile', favicon: ep.thumb || radio.favicon });
+    }catch(e){
+      if(nameEl) nameEl.textContent = '지금은 못 불러왔어요 (RSS 확인 필요)';
+      setTimeout(() => { if(nameEl) nameEl.textContent = originalName; }, 3500);
+    }
+    btnEl.disabled = false;
+  }
+
+  function makeSectionLabel(text){
+    const h = document.createElement('div');
+    h.className = 'list-section-label';
+    h.textContent = text;
+    return h;
+  }
+
+  // ---------- TONIGHT'S KOREAN TALK (real Korean-language talk-radio stations, audio-only by nature) ----------
+  let curatedTalks = [];
+  let curatedTalksLoading = false;
+  const TALK_NOISY_KEYWORDS = NOISY_KEYWORDS.concat([
+    '속보','스포츠중계','예능','시사','뉴스전문',
+    'kpop','k-pop','아이돌','idol','가요','인기가요','댄스가요','최신가요',
+    '힙합','hiphop','k-hiphop','clubmix','remix','디제이','dj mix'
+  ]);
+
+  function isLikelyCalmTalk(station){
+    const text = `${station.name} ${station.tags}`.toLowerCase();
+    return !TALK_NOISY_KEYWORDS.some(k => text.includes(k));
+  }
+
+  async function fetchCuratedTalks(){
+    curatedTalksLoading = true;
+    for(const host of RADIO_BROWSER_HOSTS){
+      try{
+        // Prefer stations explicitly tagged "talk" within Korea first — much more targeted than the full country list.
+        let data = [];
+        try{
+          const res1 = await fetch(`https://${host}/json/stations/search?country=South%20Korea&tag=talk&order=votes&reverse=true&limit=15&hidebroken=true`);
+          if(res1.ok) data = await res1.json();
+        }catch(e){}
+
+        if(!data.length){
+          const res2 = await fetch(`https://${host}/json/stations/bycountrycodeexact/KR?order=votes&reverse=true&limit=40&hidebroken=true`);
+          if(!res2.ok) throw new Error('bad response');
+          data = await res2.json();
+        }
+
+        const items = data
+          .filter(st => st.url_resolved)
+          .filter(isLikelyCalmTalk)
+          .slice(0, 5)
+          .map(st => ({
+            name: st.name.trim().slice(0, 40),
+            url: st.url_resolved,
+            platform: 'stream',
+            labelOverride: '한국어 라디오',
+            favicon: st.favicon || '',
+            desc: (st.tags || '실시간 방송').split(',').slice(0,2).join(' · ')
+          }));
+        if(items.length){
+          curatedTalks = items;
+          curatedTalksLoading = false;
+          return;
+        }
+      }catch(e){ /* try next host */ }
+    }
+    curatedTalksLoading = false;
+  }
+
+  function renderRadioList(){
+    renderStreakBadge();
+    const wrap = $('radio-list');
+    wrap.innerHTML = '';
+
+    if(curatedTalks.length){
+      wrap.appendChild(makeSectionLabel('오늘 밤의 한국어 토크'));
+      curatedTalks.forEach(r => wrap.appendChild(makeRadioCard(r)));
+    }
+
+    const all = [...curatedStations, ...state.radios];
+    if(curatedLoading && !curatedStations.length && !curatedTalks.length){
+      const p = document.createElement('div');
+      p.className = 'radio-empty';
+      p.textContent = '실시간 라디오 목록을 불러오는 중...';
+      wrap.appendChild(p);
+      return;
+    }
+    if(!all.length && !curatedTalks.length){
+      const p = document.createElement('div');
+      p.className = 'radio-empty';
+      p.textContent = '지금은 목록을 불러오지 못했어요. 설정에서 직접 추가해볼 수 있어요.';
+      wrap.appendChild(p);
+      return;
+    }
+    if(all.length){
+      if(curatedTalks.length) wrap.appendChild(makeSectionLabel('음악 라디오'));
+      all.forEach(r => wrap.appendChild(makeRadioCard(r)));
+    }
+  }
+
+  async function loadCuratedTalksIfNeeded(){
+    if(curatedTalks.length || curatedTalksLoading) { renderRadioList(); return; }
+    await fetchCuratedTalks();
+    renderRadioList();
+  }
+
+  async function loadCuratedIfNeeded(){
+    loadCuratedTalksIfNeeded();
+    if(curatedStations.length || curatedLoading) { renderRadioList(); return; }
+    renderRadioList(); // shows loading state
+    await fetchCuratedStations();
+    renderRadioList();
+  }
+
+  // ---------- SETTINGS ----------
+  function renderSettings(){
+    $('dur-radio').value = state.durRadio;
+    $('dur-sleep').value = state.durSleep;
+    $('sleep-sound-file').value = state.sleepFile;
+    $('alarm-time').value = state.alarmTime;
+    const list = $('radio-manage-list');
+    list.innerHTML = '<label class="field-label">등록된 라디오</label>';
+    state.radios.forEach((r, i) => {
+      const row = document.createElement('div');
+      row.className = 'settings-radio-item';
+      row.style.marginBottom = '6px';
+      const platformLabel = { podbbang:'팟빵', spotify:'스포티파이', audiofile:'오디오' }[r.platform] || '유튜브';
+      row.innerHTML = `<span>${r.name || '이름 없음'} · ${platformLabel}</span>`;
+      const del = document.createElement('button');
+      del.textContent = '✕';
+      del.addEventListener('click', () => { state.radios.splice(i,1); renderSettings(); });
+      row.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+  function readSettingsForm(){
+    state.durRadio = parseInt($('dur-radio').value) || 30;
+    state.durSleep = parseInt($('dur-sleep').value) || 30;
+    state.sleepFile = $('sleep-sound-file').value.trim() || 'sleep.mp3';
+    state.alarmTime = $('alarm-time').value || '00:00';
+  }
+  $('btn-set-alarm').addEventListener('click', () => {
+    const t = $('alarm-time').value || '00:00';
+    state.alarmTime = t;
+    save();
+    const [hour, minute] = t.split(':').map(Number);
+    const intentUrl = `intent:#Intent;action=android.intent.action.SET_ALARM;` +
+      `i.android.intent.extra.alarm.HOUR=${hour};` +
+      `i.android.intent.extra.alarm.MINUTES=${minute};` +
+      `S.android.intent.extra.alarm.MESSAGE=${encodeURIComponent('잠드는 피드')};` +
+      `end`;
+    window.location.href = intentUrl;
+  });
+  $('btn-pick-local-file').addEventListener('click', () => $('local-file-input').click());
+  $('local-file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    if(localAudioObjectUrl) URL.revokeObjectURL(localAudioObjectUrl);
+    localAudioObjectUrl = URL.createObjectURL(file);
+    $('local-file-status').textContent = `"${file.name}" 선택됨 — 오늘 밤만 이 파일로 테스트돼요. 계속 쓰려면 저장소에 올려주세요.`;
+  });
+  $('btn-add-radio').addEventListener('click', () => {
+    const name = $('new-radio-name').value.trim();
+    const url = $('new-radio-url').value.trim();
+    const platform = $('new-radio-platform').value;
+    if(!name || !url) return;
+    state.radios.push({ name, url, platform });
+    $('new-radio-name').value = '';
+    $('new-radio-url').value = '';
+    renderSettings();
+  });
+  $('new-radio-platform').addEventListener('change', (e) => {
+    const hints = {
+      rss: '이 팟캐스트의 RSS 피드 주소를 넣으면, 열 때마다 최신 화를 자동으로 가져와서 틀어줘요. 팟빵 방송 설정이나 podbbang.com에서 "RSS" 또는 "구독 주소"를 검색해서 찾을 수 있어요.',
+      audiofile: 'mp3로 끝나는 직접 파일 주소를 붙여넣으면, 앱 밖으로 안 튕기고 이 안에서 바로 재생돼요. (팟빵 에피소드의 "다운로드" 링크, 또는 저장소에 올린 파일 등)',
+      podbbang: '팟빵 앱/웹에서 공유 → 소스코드(임베드) 옵션을 찾아, 거기 나온 주소를 붙여넣어 주세요. 다만 스포티파이 앱으로 튕길 수 있어요.',
+      spotify: '스포티파이에서 에피소드나 쇼 페이지 열고 공유 → 링크 복사한 주소를 붙여넣으면 돼요. 다만 스포티파이 앱이 설치돼 있으면 앱으로 튕길 수 있어요.',
+      youtube: '유튜브 영상/라이브 주소를 그대로 붙여넣으면 돼요.'
+    };
+    $('platform-hint').textContent = hints[e.target.value] || hints.rss;
+  });
+
+
+  // ---------- PLAYER (radio phase, fade overlay) ----------
+  function startPlayer(radio){
+    clearTimeout(timerHandle);
+    $('fade-overlay').style.opacity = '0';
+    $('player-label').textContent = radio.name || '라디오 재생 중';
+    const wrap = $('player-embed-wrap');
+    wrap.innerHTML = '';
+    // Always show the audio-first UI — video (if any) is never visible, only heard.
+    wrap.classList.add('is-audio-only');
+
+    const art = document.createElement('div');
+    art.className = 'player-audio-art';
+    const defaultIcon = radio.platform === 'audiofile' ? '🎧' : (radio.platform === 'stream' ? '📻' : '🎙️');
+    art.innerHTML = radio.favicon
+      ? `<img src="${radio.favicon}" alt="" onerror="this.remove();">`
+      : `<span>${defaultIcon}</span>`;
+    wrap.appendChild(art);
+    const bars = document.createElement('div');
+    bars.className = 'eq-bars';
+    bars.innerHTML = '<span></span><span></span><span></span><span></span><span></span>';
+    wrap.appendChild(bars);
+
+    if(radio.platform === 'stream' || radio.platform === 'audiofile'){
+      const audio = document.createElement('audio');
+      audio.id = 'player-audio-el';
+      audio.autoplay = true;
+      audio.src = radio.url;
+      wrap.appendChild(audio);
+    } else {
+      const embed = toEmbeddable(radio.url, radio.platform);
+      if(embed){
+        const iframe = document.createElement('iframe');
+        iframe.className = 'hidden-video-iframe';
+        iframe.src = embed;
+        iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+        wrap.appendChild(iframe);
+      }
+    }
+    show('screen-player');
+    document.body.style.background = 'var(--bg-base)';
+
+    phaseTotalMs = state.durRadio * 60 * 1000;
+    phaseStartAt = Date.now();
+    phaseEndAt = phaseStartAt + phaseTotalMs;
+    tickPlayer();
+  }
+
+  function tickPlayer(){
+    clearTimeout(timerHandle);
+    const now = Date.now();
+    const remain = Math.max(0, phaseEndAt - now);
+    const elapsedFrac = Math.min(1, (now - phaseStartAt) / phaseTotalMs);
+    // fade begins after 60% of the duration, reaching full black by the end
+    const fadeStart = 0.6;
+    let opacity = 0;
+    if(elapsedFrac > fadeStart){
+      opacity = (elapsedFrac - fadeStart) / (1 - fadeStart);
+    }
+    $('fade-overlay').style.opacity = String(Math.min(1, opacity));
+
+    const m = String(Math.floor(remain/60000)).padStart(2,'0');
+    const s = String(Math.floor((remain%60000)/1000)).padStart(2,'0');
+    $('player-timer').textContent = `${m}:${s}`;
+
+    if(remain <= 0){
+      startSleepSound();
+      return;
+    }
+    timerHandle = setTimeout(tickPlayer, 500);
+  }
+
+  // ---------- SLEEP SOUND ----------
+  function startSleepSound(){
+    show('screen-sleep');
+    document.body.style.background = '#000';
+    let audioEl = document.getElementById('sleep-audio-el');
+    if(!audioEl){
+      audioEl = document.createElement('audio');
+      audioEl.id = 'sleep-audio-el';
+      audioEl.loop = true;
+      document.body.appendChild(audioEl);
+    }
+    const src = localAudioObjectUrl || state.sleepFile;
+    if(src){
+      audioEl.src = src;
+      audioEl.play().catch(()=>{});
+    }
+    if('mediaSession' in navigator){
+      navigator.mediaSession.metadata = new MediaMetadata({ title:'잠드는 피드', artist:'수면 사운드' });
+    }
+    phaseTotalMs = state.durSleep * 60 * 1000;
+    phaseStartAt = Date.now();
+    phaseEndAt = phaseStartAt + phaseTotalMs;
+    tickSleep();
+  }
+
+  function tickSleep(){
+    clearTimeout(timerHandle);
+    const remain = Math.max(0, phaseEndAt - Date.now());
+    const m = String(Math.floor(remain/60000)).padStart(2,'0');
+    const s = String(Math.floor((remain%60000)/1000)).padStart(2,'0');
+    $('sleep-timer').textContent = `${m}:${s} 남음 · 수면 사운드`;
+    const audioEl = document.getElementById('sleep-audio-el');
+    if(audioEl){
+      // gentle fade-out over the last 20 seconds instead of an abrupt stop
+      if(remain < 20000){
+        audioEl.volume = Math.max(0, remain / 20000);
+      } else {
+        audioEl.volume = 1;
+      }
+    }
+    if(remain <= 0){ finishSequence(); return; }
+    timerHandle = setTimeout(tickSleep, 500);
+  }
+
+  function todayKey(){ const d = new Date(); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
+  function yesterdayKey(){ const d = new Date(); d.setDate(d.getDate()-1); return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`; }
+
+  function updateStreak(){
+    const today = todayKey();
+    if(state.streakLastDate === today){ /* already counted today */ }
+    else if(state.streakLastDate === yesterdayKey()){ state.streakCount += 1; }
+    else { state.streakCount = 1; }
+    state.streakLastDate = today;
+    save();
+  }
+
+  function renderStreakBadge(){
+    const el = $('streak-badge');
+    if(state.streakCount > 0){
+      el.style.display = 'inline-flex';
+      el.textContent = `🌙 연속 ${state.streakCount}일째`;
+    } else {
+      el.style.display = 'none';
+    }
+  }
+
+  function finishSequence(){
+    stopSleepMedia();
+    updateStreak();
+    const streakLine = $('end-streak-line');
+    if(streakLine){
+      streakLine.textContent = state.streakCount > 1 ? `${state.streakCount}일 연속으로 해냈어요.` : '오늘 첫 기록이 쌓였어요.';
+    }
+    show('screen-end');
+    document.body.style.background = 'var(--bg-base)';
+  }
+
+  $('btn-restart').addEventListener('click', () => {
+    clearTimeout(timerHandle);
+    loadCuratedIfNeeded();
+    show('screen-home');
+    setNavActive('nav-home');
+  });
+
+  function stopPlayerMedia(){
+    const wrap = $('player-embed-wrap');
+    if(wrap) wrap.innerHTML = '';
+  }
+  function stopSleepMedia(){
+    const audioEl = document.getElementById('sleep-audio-el');
+    if(audioEl) audioEl.pause();
+  }
+
+  $('btn-player-close').addEventListener('click', () => {
+    clearTimeout(timerHandle);
+    stopPlayerMedia();
+    loadCuratedIfNeeded();
+    show('screen-home');
+    setNavActive('nav-home');
+    document.body.style.background = 'var(--bg-base)';
+  });
+  $('btn-player-skip').addEventListener('click', () => {
+    clearTimeout(timerHandle);
+    stopPlayerMedia();
+    startSleepSound();
+  });
+  $('btn-sleep-close').addEventListener('click', () => {
+    clearTimeout(timerHandle);
+    stopSleepMedia();
+    loadCuratedIfNeeded();
+    show('screen-home');
+    setNavActive('nav-home');
+    document.body.style.background = 'var(--bg-base)';
+  });
+
+  load();
+  loadCuratedIfNeeded();
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
